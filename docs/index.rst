@@ -24,7 +24,7 @@ In this documentation
 
        **Start here**: a hands-on introduction to encrypt-cloud-image for new users
 
-   ..  grid-item:: :doc:`How-to guides <howto/index>`
+   ..  grid-item:: :doc:`How-to guides <how-to/index>`
 
       **Step-by-step guides** covering key operations and common tasks
 
@@ -60,6 +60,6 @@ encrypt-cloud-image is a member of the Ubuntu family. It’s an open source proj
 
    self
    /tutorials/index
-   /howto/index
+   /how-to/index
    /reference/index
    /explanation/index

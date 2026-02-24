@@ -58,12 +58,12 @@ the instructions from [](custom-cert)
 ````{tabs}
 
 :::{group-tab} CVM with FDE
-```{include} ../howto/encrypt-only.md
+```{include} ../how-to/encrypt-only.md
 ```
 :::
 
 :::{group-tab} Ephemeral VM with rootfs integrity
-```{include} ../howto/integrity-only.md
+```{include} ../how-to/integrity-only.md
 ```
 :::
 
