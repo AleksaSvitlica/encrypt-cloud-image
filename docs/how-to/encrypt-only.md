@@ -106,8 +106,6 @@ cert-to-efi-sig-list -g $msguid certs/KEK-$msguid-MicrosoftCorporationKEKCA2011.
 create-uefi-config -i uefi-config.json -i certs
 ```
 
----
-
 Finally the deploy command can be called to create the final TPM bound image:
 ```bash
 sudo encrypt-cloud-image deploy --srk-pub srk.pub \

@@ -55,19 +55,10 @@ If you are building a custom image you need to modify the instructions below usi
 the instructions from [](custom-cert)
 ```
 
-````{tabs}
+There are two supported workflows for image provisioning. Please follow one of these depending on your intended scenario:
 
-:::{group-tab} CVM with FDE
-```{include} ../how-to/encrypt-only.md
-```
-:::
-
-:::{group-tab} Ephemeral VM with rootfs integrity
-```{include} ../how-to/integrity-only.md
-```
-:::
-
-````
+- [Provision an image for CVM with FDE](../how-to/encrypt-only.md)
+- [Provision an image with OS disk integrity for ephemeral VMs](../how-to/integrity-only.md)
 
 ## Create cloud-init metadata
 To create the cloud-init seed partition (replace your launchpad user):
