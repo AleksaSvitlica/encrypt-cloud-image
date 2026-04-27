@@ -33,6 +33,7 @@ import (
 	"github.com/canonical/go-tpm2/mu"
 	"github.com/canonical/tcglog-parser"
 	log "github.com/sirupsen/logrus"
+	"github.com/snapcore/secboot"
 	secboot_efi "github.com/snapcore/secboot/efi"
 	secboot_tpm2 "github.com/snapcore/secboot/tpm2"
 
@@ -412,11 +413,36 @@ func (d *imageDeployer) deployImageOnDevice() error {
 	}
 
 	log.Infoln("creating importable sealed key object")
-	params := secboot_tpm2.KeyCreationParams{
+	params := secboot_tpm2.ProtectKeyParams{
 		PCRProfile:             pcrProfile,
-		PCRPolicyCounterHandle: tpm2.HandleNull}
-	if _, err := secboot_tpm2.SealKeyToExternalTPMStorageKey(srkPub, key, filepath.Join(keyDir, "cloudimg-rootfs.sealed-key"), &params); err != nil {
-		return fmt.Errorf("cannot seal disk unlock key: %w", err)
+		PCRPolicyCounterHandle: tpm2.HandleNull,
+	}
+
+	protectedKey, _, unlockKey, err := secboot_tpm2.NewExternalTPMProtectedKey(srkPub, &params)
+	if err != nil {
+		return fmt.Errorf("cannot get TPM protected key: %w", err)
+	}
+
+	keyPath := filepath.Join(keyDir, "cloudimg-rootfs.sealed-key")
+	log.Infoln("Writing protected key to ", keyPath)
+	w := secboot.NewFileKeyDataWriter(keyPath)
+	if err := protectedKey.WriteAtomic(w); err != nil {
+		return fmt.Errorf("cannot write sealed key data file: %w", err)
+	}
+
+	log.Infoln("Adding unlock key to keyslot")
+	opts := luks2.AddKeyOptions{
+		KDFOptions: luks2.KDFOptions{
+			ForceIterations: minimumPBKDF2Iterations},
+		Slot: luks2.AnySlot,
+	}
+	if err := luks2.AddKey(d.rootDevPath(), key, unlockKey, &opts); err != nil {
+		return fmt.Errorf("cannot add key to LUKS2 container %w", err)
+	}
+
+	log.Infoln("Removing unprotected key from LUKS2 container")
+	if err := luks2.RemoveKey(d.rootDevPath(), key); err != nil {
+		return fmt.Errorf("cannot remove key from LUKS2 container %w", err)
 	}
 
 	if err := d.maybeWriteCustomSRKTemplate(espPath, srkPub); err != nil {
