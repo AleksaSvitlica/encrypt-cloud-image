@@ -1,7 +1,9 @@
 (command-deploy)=
+
 # `deploy`
 
 Basic usage:
+
 ```bash
 encrypt-cloud-image deploy --srk-pub srk.pub <encrypted_image>
 ```
@@ -15,7 +17,9 @@ the storage primary key (`--srk-pub` argument above).
 ## Protection options
 
 ### PCR policy configuration
+
 The `deploy` subcommand has several options for customizing the PCR policy of the TPM protected key:
+
 - `--add-efi-boot-manager-profile`: Protect the key with the *UEFI Boot Manager Code and Boot Attempts* profile,
 as measured to PCR4 (see section 3.3.4.5 of the [TCG PC Client Platform Firmware Profile Specification](https://trustedcomputinggroup.org/wp-content/uploads/TCG_PCClient_PFP_r1p05_v23_pub.pdf)).
 This requires the UEFI configuration of the guest to be supplied.
@@ -34,7 +38,9 @@ later stages.
 ```
 
 ### Guest UEFI configuration
+
 By default, the `deploy` subcommand will use the UEFI configuration of the host environment. The UEFI configuration of the guest can be supplied in order to override this using one of the following options:
+
 - `--uefi-config`: A file containing a JSON representation of the UEFI configuration, with the following fields:
   - `PK` [base64] - The value of the PK variable.
   - `KEK` [base64] - The value of the KEK variable.
@@ -44,6 +50,7 @@ By default, the `deploy` subcommand will use the UEFI configuration of the host 
 - `--az-disk-profile`: documentation *TODO*
 
 This is an example `deploy` invocation which uses the boot attempts and secure boot profile:
+
 ```bash
 sudo encrypt-cloud-image deploy --srk-pub srk.pub \
                                 --uefi-config uefi-config.json \

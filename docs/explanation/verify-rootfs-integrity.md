@@ -1,4 +1,5 @@
 (verify-rootfs)=
+
 # (WIP) How to verify the integrity of the rootfs
 
 ```{caution}
@@ -11,6 +12,7 @@ in the initramfs stage but as snapd doesn't yet properly integrate with
 a few manual steps are required.
 
 Measurements done are exposed via the stamped-action mechanism and need to be inserted in systemd's log. In a running VM:
+
 ```bash
 sudo su
 cd /run/snapd/snap-bootstrap
@@ -20,6 +22,7 @@ cd /run/snapd/snap-bootstrap
 ```
 
 Then the log can be checked against the TPM2 reported values with something like systemd's pcrlock tool.
+
 ```bash
 sudo /usr/lib/systemd/systemd-pcrlock
 ```

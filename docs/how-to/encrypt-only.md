@@ -3,6 +3,7 @@
 This workflow describes the image provisioning process for a confidential
 VM using FDE. The FDE operations are backed by a vTPM which is required for
 booting. The process is split in 2 parts:
+
 - encrypting the rootfs and then
 - restrict usage of the FDE key to systems that match a specific system
    state (sealing) using the vTPM.
@@ -10,7 +11,9 @@ booting. The process is split in 2 parts:
 The following sections describe the provisioning process for a local QEMU VM.
 
 ## Encrypt the rootfs
+
 The first step is done using the [](../reference/encrypt.md) command:
+
 ```bash
 sudo encrypt-cloud-image encrypt -o encrypted.vhd \
                                  --override-datasources "NoCloud" \
@@ -18,12 +21,12 @@ sudo encrypt-cloud-image encrypt -o encrypted.vhd \
 ```
 
 ## Bind FDE key to a virtual TPM
+
 The second step is done using the [](../reference/deploy.md) command. There are 2
 prerequisites:
 1. creation of the SRK template that will be used by the Guest's vTPM.
 2. creation of the guest UEFI configuration parameters in order to seal the FDE key
   to the QEMU vm's secure boot variables.
-
 
 ### 1. Setting up a vTPM and generating an SRK primary key
 
@@ -39,6 +42,7 @@ swtpm socket --server type=unixio,path=/tmp/mytpm0/swtpm-sock \
 ```
 
 To create an SRK:
+
 ```bash
 export TPM2TOOLS_TCTI="swtpm:path=/tmp/mytpm0/swtpm-sock"
 tpm2_createprimary -c srk.ctx
@@ -107,6 +111,7 @@ create-uefi-config -i uefi-config.json -i certs
 ```
 
 Finally the deploy command can be called to create the final TPM bound image:
+
 ```bash
 sudo encrypt-cloud-image deploy --srk-pub srk.pub \
                                 --uefi-config uefi-config.json \

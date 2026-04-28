@@ -1,7 +1,9 @@
 (building)=
+
 # (WIP) Building an image locally from scratch
 
 Summary of the steps of the image building process for an Ubuntu cloud image based on noble:
+
 1. (Optional) Build snapd.
 2. (Optional) Build core-initrd.
 3. (Optional) Build the linux-azure-fde kernel.
@@ -11,9 +13,11 @@ Steps marked as optional are only required if needed features are not available 
 versions available in the Ubuntu archive.
 
 ## 1. Build snapd
+
 TODO (straight forward)
 
 ## 2. Build core-initrd
+
 TODO (straight forward)
 
 ## 3. Building the linux-azure-fde kernel UKI
@@ -27,6 +31,7 @@ This can be built manually and not wait on the kernel team's auxiliary bot to de
 4. `linux-meta-azure` builds the final linux-azure-fde package.
 
 For step 2, in order to replicate the signing service, you can use something like:
+
 ```bash
 abi_version="6.8.0-1009"
 version="${abi_version}.9"
@@ -65,8 +70,10 @@ This assumes a local repo setup that you sign with a key that is in your GPG key
 ```
 
 ## 4. Building the final image using ubuntu-bartender from ubuntu-old-fashioned
+
 ```{note}
 You need to point bartender to include your local repo and add an iptables rule for the multipass vm
 to be able to see it.
 ```
+
 TODO
