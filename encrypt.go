@@ -120,6 +120,64 @@ func luks2Encrypt(path string, key []byte) error {
 	return cmd.Run()
 }
 
+// luks2Repair repairs inconsistent LUKS2 reencryption metadata.
+// This is required when reencryption was interrupted in an inconsistent state.
+func luks2Repair(path string, key []byte) error {
+	cmd := internal_exec.LoggedCommand("cryptsetup",
+		// verbose
+		"-v",
+		// batch processing
+		"-q",
+		// repair the LUKS2 metadata
+		"repair",
+		// read the key from stdin
+		"--key-file", "-",
+		path)
+	cmd.Stdin = bytes.NewReader(key)
+
+	return cmd.Run()
+}
+
+// luks2EncryptResume resumes an in-progress LUKS2 encryption operation.
+func luks2EncryptResume(path string, key []byte) error {
+	cmd := internal_exec.LoggedCommand("cryptsetup",
+		// verbose
+		"-v",
+		// batch processing
+		"-q",
+		// resume an in-progress encryption
+		"reencrypt", "--resume-only",
+		// read the key from stdin
+		"--key-file", "-",
+		// Print progress details like estimated time remaining
+		"--progress-json",
+		// Print progress every 2 seconds
+		"--progress-frequency", fmt.Sprintf("%d", 2),
+		path)
+	cmd.Stdin = bytes.NewReader(key)
+
+	return cmd.Run()
+}
+
+// luks2EncryptResumeWithRepair attempts to resume encryption, and if that fails
+// due to inconsistent metadata, it repairs the device and retries the resume.
+func luks2EncryptResumeWithRepair(path string, key []byte) error {
+	err := luks2EncryptResume(path, key)
+	if err != nil {
+		log.Infoln("resume failed, attempting repair on", path)
+		if repairErr := luks2Repair(path, key); repairErr != nil {
+			return fmt.Errorf("cannot repair LUKS2 metadata: %w (original error: %v)", repairErr, err)
+		}
+
+		log.Infoln("repair completed, retrying resume on", path)
+		if err := luks2EncryptResume(path, key); err != nil {
+			return fmt.Errorf("cannot resume encryption after repair: %w", err)
+		}
+	}
+
+	return nil
+}
+
 func luks2SetLabel(path, label string) error {
 	cmd := internal_exec.LoggedCommand("cryptsetup", "-v", "config", "--label", label, path)
 	return cmd.Run()
@@ -457,14 +515,21 @@ func (e *imageEncrypter) growRootPartition() error {
 func (e *imageEncrypter) encryptRootPartition() error {
 	devPath := e.rootDevPath()
 
-	log.Infoln("shrinking fileystem on", devPath)
-	if err := shrinkExtFS(devPath); err != nil {
-		return fmt.Errorf("cannot shrink filesystem: %w", err)
-	}
+	if e.isResuming {
+		log.Infoln("resuming encryption on", devPath)
+		if err := luks2EncryptResumeWithRepair(devPath, e.unlockKey); err != nil {
+			return fmt.Errorf("cannot resume encryption on %s: %w", devPath, err)
+		}
+	} else {
+		log.Infoln("shrinking fileystem on", devPath)
+		if err := shrinkExtFS(devPath); err != nil {
+			return fmt.Errorf("cannot shrink filesystem: %w", err)
+		}
 
-	log.Infoln("encrypting", devPath)
-	if err := luks2Encrypt(devPath, e.unlockKey); err != nil {
-		return fmt.Errorf("cannot encrypt %s: %w", devPath, err)
+		log.Infoln("encrypting", devPath)
+		if err := luks2Encrypt(devPath, e.unlockKey); err != nil {
+			return fmt.Errorf("cannot encrypt %s: %w", devPath, err)
+		}
 	}
 
 	log.Infoln("setting label")
