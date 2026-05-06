@@ -450,42 +450,35 @@ func (e *imageEncrypter) growRootPartition() error {
 	return nil
 }
 
-func (e *imageEncrypter) encryptRootPartition() ([]byte, error) {
+func (e *imageEncrypter) encryptRootPartition() error {
 	devPath := e.rootDevPath()
 
 	log.Infoln("shrinking fileystem on", devPath)
 	if err := shrinkExtFS(devPath); err != nil {
-		return nil, fmt.Errorf("cannot shrink filesystem: %w", err)
-	}
-
-	// For tpm import sensitive data should not be larger than block size (64) else we get TPM_RC_KEY_SIZE
-	// so with two keys we need to keep key size at 16 each.
-	var key [16]byte
-	if _, err := rand.Read(key[:]); err != nil {
-		return nil, fmt.Errorf("cannot obtain primary unlock key: %w", err)
+		return fmt.Errorf("cannot shrink filesystem: %w", err)
 	}
 
 	log.Infoln("encrypting", devPath)
-	if err := luks2Encrypt(devPath, key[:]); err != nil {
-		return nil, fmt.Errorf("cannot encrypt %s: %w", devPath, err)
+	if err := luks2Encrypt(devPath, e.unlockKey); err != nil {
+		return fmt.Errorf("cannot encrypt %s: %w", devPath, err)
 	}
 
 	log.Infoln("setting label")
 	if err := luks2SetLabel(devPath, "cloudimg-rootfs-enc"); err != nil {
-		return nil, fmt.Errorf("cannot set label: %w", err)
+		return fmt.Errorf("cannot set label: %w", err)
 	}
 
 	token := &luks2.GenericToken{
 		TokenType:     luks2TokenType,
 		TokenKeyslots: []int{0},
 		Params: map[string]interface{}{
-			luks2TokenKey: key[:],
+			luks2TokenKey: e.unlockKey,
 		},
 	}
 
 	log.Infoln("importing cleartext token")
 	if err := luks2.ImportToken(devPath, token); err != nil {
-		return nil, fmt.Errorf("cannot import token into LUKS2 container: %w", err)
+		return fmt.Errorf("cannot import token into LUKS2 container: %w", err)
 	}
 
 	e.enterScope()
@@ -493,8 +486,8 @@ func (e *imageEncrypter) encryptRootPartition() ([]byte, error) {
 
 	volumeName := filepath.Base(devPath)
 	log.Infoln("attaching encrypted container as", volumeName)
-	if err := luks2.Activate(volumeName, devPath, key[:]); err != nil {
-		return nil, fmt.Errorf("cannot activate LUKS container: %w", err)
+	if err := luks2.Activate(volumeName, devPath, e.unlockKey); err != nil {
+		return fmt.Errorf("cannot activate LUKS container: %w", err)
 	}
 	e.addCleanup(func() error {
 		log.Infoln("detaching", volumeName)
@@ -507,13 +500,13 @@ func (e *imageEncrypter) encryptRootPartition() ([]byte, error) {
 
 	log.Infoln("growing filesystem on", path)
 	if err := growExtFS(path); err != nil {
-		return nil, fmt.Errorf("cannot grow filesystem: %w", err)
+		return fmt.Errorf("cannot grow filesystem: %w", err)
 	}
 
-	return key[:], nil
+	return nil
 }
 
-func (e *imageEncrypter) customizeRootFS(growPartKey [32]byte) error {
+func (e *imageEncrypter) customizeRootFS() error {
 	log.Infoln("applying customizations to image")
 
 	e.enterScope()
@@ -559,7 +552,7 @@ growpart:
 		log.Debugln("writing key data for cloud-init cc_growpart")
 
 		data := growPartKeyData{
-			Key:  growPartKey[:],
+			Key:  e.growPartKey,
 			Slot: luks2GrowPartKeyslot}
 		b, err := json.Marshal(&data)
 		if err != nil {
@@ -608,14 +601,7 @@ func (e *imageEncrypter) encryptImageOnDevice() error {
 		log.Infoln("verified in-progress encryption on", devPath, "- resuming")
 	}
 
-	var growPartKey [32]byte
-	if !e.opts.GrowRoot {
-		if _, err := rand.Read(growPartKey[:]); err != nil {
-			return fmt.Errorf("cannot obtain key for cc_growpart: %w", err)
-		}
-	}
-
-	if err := e.customizeRootFS(growPartKey); err != nil {
+	if err := e.customizeRootFS(); err != nil {
 		return fmt.Errorf("cannot apply customizations to root filesystem: %w", err)
 	}
 
@@ -625,8 +611,7 @@ func (e *imageEncrypter) encryptImageOnDevice() error {
 		return err
 	}
 
-	key, err := e.encryptRootPartition()
-	if err != nil {
+	if err := e.encryptRootPartition(); err != nil {
 		return fmt.Errorf("cannot encrypt root partition: %w", err)
 	}
 
@@ -635,7 +620,7 @@ func (e *imageEncrypter) encryptImageOnDevice() error {
 			KDFOptions: luks2.KDFOptions{
 				ForceIterations: minimumPBKDF2Iterations},
 			Slot: luks2GrowPartKeyslot}
-		if err := luks2.AddKey(e.rootDevPath(), key, growPartKey[:], &opts); err != nil {
+		if err := luks2.AddKey(e.rootDevPath(), e.unlockKey, e.growPartKey, &opts); err != nil {
 			return fmt.Errorf("cannot add key to container for cc_growpart: %w", err)
 		}
 	} else if err := e.growRootPartition(); err != nil {
