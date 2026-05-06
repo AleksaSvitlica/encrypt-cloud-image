@@ -23,6 +23,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -188,6 +189,113 @@ type imageEncrypter struct {
 
 	opts   *encryptOptions
 	failed bool
+
+	// isResuming indicates we're resuming an interrupted encryption
+	isResuming bool
+
+	// unlockKey is the encryption key (generated or loaded from state)
+	unlockKey []byte
+
+	// growPartKey is the key for cc_growpart (generated or loaded from state)
+	// nil when --grow-root is specified
+	growPartKey []byte
+}
+
+// encryptionState holds the state needed to resume an interrupted encryption
+type encryptionState struct {
+	// WorkingDir is the basename of the temporary working directory.
+	// The full path is reconstructed relative to the state file location.
+	WorkingDir string `json:"working_dir"`
+
+	// UnlockKey is the primary encryption key (base64 encoded)
+	UnlockKey string `json:"unlock_key"`
+
+	// GrowPartKey is the key for cc_growpart (base64 encoded)
+	// Empty when --grow-root is specified
+	GrowPartKey string `json:"growpart_key,omitempty"`
+}
+
+// Validate checks that all required fields in the encryptionState are set
+func (s *encryptionState) Validate() error {
+	if s.WorkingDir == "" {
+		return errors.New("working_dir is required in encryption state")
+	}
+	if s.UnlockKey == "" {
+		return errors.New("unlock_key is required in encryption state")
+	}
+	return nil
+}
+
+// stateFilePath returns the deterministic path for the state file
+func (e *imageEncrypter) stateFilePath() string {
+	basename := filepath.Base(e.opts.Positional.Input)
+	stateFileName := basename + ".encrypt-state.json"
+
+	var baseDir string
+	if e.opts.Output != "" {
+		baseDir = filepath.Dir(e.opts.Output)
+	} else {
+		baseDir = "."
+	}
+
+	return filepath.Join(baseDir, stateFileName)
+}
+
+// loadState attempts to load existing state from the state file.
+// Returns nil if no state file exists.
+func (e *imageEncrypter) loadState() (*encryptionState, error) {
+	path := e.stateFilePath()
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("cannot read state file: %w", err)
+	}
+
+	var state encryptionState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, fmt.Errorf("cannot parse state file: %w", err)
+	}
+
+	if err := state.Validate(); err != nil {
+		return nil, fmt.Errorf("state validation failed: %w", err)
+	}
+
+	return &state, nil
+}
+
+// saveState writes the current state to the state file
+func (e *imageEncrypter) saveState() error {
+	state := encryptionState{
+		WorkingDir: filepath.Base(e.workingDirPath()),
+		UnlockKey:  base64.StdEncoding.EncodeToString(e.unlockKey),
+	}
+	if e.growPartKey != nil {
+		state.GrowPartKey = base64.StdEncoding.EncodeToString(e.growPartKey)
+	}
+
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return fmt.Errorf("cannot marshal state: %w", err)
+	}
+
+	path := e.stateFilePath()
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return fmt.Errorf("cannot write state file: %w", err)
+	}
+
+	log.Debugln("wrote state file to", path)
+	return nil
+}
+
+// deleteState removes the state file
+func (e *imageEncrypter) deleteState() error {
+	path := e.stateFilePath()
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("cannot remove state file: %w", err)
+	}
+	return nil
 }
 
 func (e *imageEncrypter) maybeCopyKernelToESP() error {
