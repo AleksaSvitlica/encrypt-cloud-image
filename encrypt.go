@@ -700,6 +700,15 @@ func (e *imageEncrypter) encryptImageOnDevice() error {
 }
 
 func (e *imageEncrypter) prepareWorkingImage() (string, error) {
+	if e.isResuming {
+		path := filepath.Join(e.workingDirPath(), filepath.Base(e.opts.Output))
+		if _, err := os.Stat(path); err != nil {
+			return "", fmt.Errorf("cannot find working image for resume at %s: %w", path, err)
+		}
+		log.Infoln("using existing working image at", path, "(resume)")
+		return path, nil
+	}
+
 	f, err := os.Open(e.opts.Positional.Input)
 	if err != nil {
 		return "", fmt.Errorf("cannot open source image: %w", err)
