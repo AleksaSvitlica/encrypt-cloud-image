@@ -328,6 +328,78 @@ func (e *imageEncrypter) deleteState() error {
 	return nil
 }
 
+// checkOrCreateState checks for existing state (resume) or creates new state (default).
+// This must be called early in run() after input validation.
+func (e *imageEncrypter) checkOrCreateState() error {
+	state, err := e.loadState()
+	if err != nil {
+		return err
+	}
+
+	if state != nil {
+		// Resume scenario
+		log.Infoln("found existing state file - resuming encryption")
+		e.isResuming = true
+
+		// Reconstruct the full working directory path from the basename.
+		// The working dir is always in the same directory as the state file.
+		stateFileDir := filepath.Dir(e.stateFilePath())
+		e.workingDir = filepath.Join(stateFileDir, state.WorkingDir)
+
+		e.unlockKey, err = base64.StdEncoding.DecodeString(state.UnlockKey)
+		if err != nil {
+			return fmt.Errorf("cannot decode key from state: %w", err)
+		}
+
+		if state.GrowPartKey != "" {
+			e.growPartKey, err = base64.StdEncoding.DecodeString(state.GrowPartKey)
+			if err != nil {
+				return fmt.Errorf("cannot decode growpart key from state: %w", err)
+			}
+		}
+
+		// Verify working directory still exists
+		if _, err := os.Stat(e.workingDir); err != nil {
+			return fmt.Errorf("working directory from state no longer exists: %w", err)
+		}
+
+		e.addCleanup(func() error {
+			log.Debugln("removing", e.workingDir)
+			if err := os.RemoveAll(e.workingDir); err != nil {
+				return fmt.Errorf("cannot remove working directory: %w", err)
+			}
+			return nil
+		})
+
+		log.Debugln("resumed state: working dir =", e.workingDir)
+		return nil
+	}
+
+	log.Debugln("no state file found - no in-progress encryption to resume")
+
+	// For tpm import sensitive data should not be larger than block size (64)
+	// else we get TPM_RC_KEY_SIZE, so with two keys we need to keep key size at 16 each.
+	var key [16]byte
+	if _, err := rand.Read(key[:]); err != nil {
+		return fmt.Errorf("cannot generate primary key: %w", err)
+	}
+	e.unlockKey = key[:]
+
+	if !e.opts.GrowRoot {
+		var growKey [32]byte
+		if _, err := rand.Read(growKey[:]); err != nil {
+			return fmt.Errorf("cannot generate growpart key: %w", err)
+		}
+		e.growPartKey = growKey[:]
+	}
+
+	if err := e.setupWorkingDir(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (e *imageEncrypter) maybeCopyKernelToESP() error {
 	if e.opts.KernelEfi == "" {
 		return nil
@@ -513,6 +585,29 @@ func (e *imageEncrypter) encryptImageOnDevice() error {
 		return err
 	}
 
+	// If we're resuming, verify the device actually has in-progress encryption
+	if e.isResuming {
+		devPath := e.rootDevPath()
+		inProgress, err := isReencryptInProgress(devPath)
+		if err != nil {
+			return fmt.Errorf(
+				"cannot check encryption status on %s: %w. "+
+					"This likely means encryption was never started. "+
+					"Re-run encrypt-cloud-image to start fresh",
+				devPath, err)
+		}
+
+		if !inProgress {
+			return fmt.Errorf(
+				"state file exists but no in-progress encryption found on %s. "+
+					"Resume only supports interrupted encryption, not pre-encryption failures. "+
+					"Re-run encrypt-cloud-image to start fresh",
+				devPath)
+		}
+
+		log.Infoln("verified in-progress encryption on", devPath, "- resuming")
+	}
+
 	var growPartKey [32]byte
 	if !e.opts.GrowRoot {
 		if _, err := rand.Read(growPartKey[:]); err != nil {
@@ -522,6 +617,12 @@ func (e *imageEncrypter) encryptImageOnDevice() error {
 
 	if err := e.customizeRootFS(growPartKey); err != nil {
 		return fmt.Errorf("cannot apply customizations to root filesystem: %w", err)
+	}
+
+	// Saving state here to enable retries.
+	// We don't do this earlier because there are non-retryable steps prior to this point (image copy, rootfs customization)
+	if err := e.saveState(); err != nil {
+		return err
 	}
 
 	key, err := e.encryptRootPartition()
@@ -641,9 +742,6 @@ func (e *imageEncrypter) run(opts *encryptOptions) error {
 		return errors.New("cannot specify --output with a block device")
 	}
 
-	if err := e.setupWorkingDir(); err != nil {
-		return err
-	}
 	rootPartitionUUIDOverride := opts.RootPartitionUUID != ""
 	espPartitionUUIDOverride := opts.ESPPartitionUUID != ""
 
@@ -654,6 +752,16 @@ func (e *imageEncrypter) run(opts *encryptOptions) error {
 	if rootPartitionUUIDOverride && fi.Mode()&os.ModeDevice == 0 {
 		return errors.New("overrides for partition detection are supported only when specifying block device")
 	}
+
+	if err := e.checkOrCreateState(); err != nil {
+		return err
+	}
+
+	// Always clean-up state file, it is only preserved on external crashes
+	// in order to enable resuming in-progress encryption
+	e.addCleanup(func() error {
+		return e.deleteState()
+	})
 
 	if fi.Mode()&os.ModeDevice != 0 {
 		// Input file is a block device
