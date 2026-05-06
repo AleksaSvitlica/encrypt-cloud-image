@@ -603,10 +603,10 @@ func (e *imageEncrypter) encryptImageOnDevice() error {
 		}
 
 		log.Infoln("verified in-progress encryption on", devPath, "- resuming")
-	}
-
-	if err := e.customizeRootFS(); err != nil {
-		return fmt.Errorf("cannot apply customizations to root filesystem: %w", err)
+	} else {
+		if err := e.customizeRootFS(); err != nil {
+			return fmt.Errorf("cannot apply customizations to root filesystem: %w", err)
+		}
 	}
 
 	// Saving state here to enable retries.
