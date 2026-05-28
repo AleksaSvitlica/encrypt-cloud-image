@@ -188,6 +188,8 @@ linkcheck_ignore = [
     "https://example.com",
     # SourceForge domains often block linkcheck
     r"https://.*\.sourceforge\.(net|io)/.*",
+    # Uses Cloudflare captcha which blocks linkcheck
+    "https://trustedcomputinggroup.org",
 ]
 
 # A regex list of URLs where anchors are ignored by 'make linkcheck'
