@@ -31,6 +31,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -122,6 +123,35 @@ func luks2Encrypt(path string, key []byte) error {
 func luks2SetLabel(path, label string) error {
 	cmd := internal_exec.LoggedCommand("cryptsetup", "-v", "config", "--label", label, path)
 	return cmd.Run()
+}
+
+// isReencryptInProgress checks if a LUKS2 device has an in-progress reencryption operation
+func isReencryptInProgress(devicePath string) (bool, error) {
+	cmd := internal_exec.LoggedCommand("cryptsetup", "luksDump", "--dump-json-metadata", devicePath)
+	output, err := cmd.Output()
+	if err != nil {
+		return false, fmt.Errorf("cannot dump LUKS2 metadata: %w", err)
+	}
+
+	var metadata struct {
+		Config struct {
+			Requirements struct {
+				Mandatory []string `json:"mandatory"`
+			} `json:"requirements"`
+		} `json:"config"`
+	}
+
+	if err := json.Unmarshal(output, &metadata); err != nil {
+		return false, fmt.Errorf("cannot parse LUKS2 metadata JSON: %w", err)
+	}
+
+	for _, req := range metadata.Config.Requirements.Mandatory {
+		if strings.HasPrefix(req, "online-reencrypt") || strings.HasPrefix(req, "offline-reencrypt") {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 func growExtFS(path string) error {
