@@ -1,7 +1,9 @@
 (architecture)=
+
 # Architecture
 
 `encrypt-cloud-images` expects as input Ubuntu cloud images with the following characteristics:
+
 - come in vhd format
 - boot the kernel directly from UEFI using a UKI (without GRUB)
 
@@ -13,6 +15,7 @@ cmdline with `snapd_recovery_mode=cloudimg-rootfs` for certain kernel flavors as
 script.
 
 ## Default CVM mode (gen1)
+
 `snap-bootstrap` is [part of the snapd repo](https://github.com/canonical/snapd/tree/master/cmd/snap-bootstrap)
 and is responsible (among others) for setting up the partitions, including communications with the TPM,
 unsealing operations etc. Currently it contains a special mode for confidential VMs which is triggered when
@@ -24,8 +27,8 @@ After provisioning the template file is deleted.
 - try and unseal the FDE key for the rootfs using a key that is saved in a sealed blob in the ESP under `ESP/device/fde/cloudimg-rootfs.sealed-key`.
 - decrypt the rootfs and continue booting.
 
-
 ## Manifest CVM mode (gen2)
+
 CVM mode also supports mounting of an unencrypted rootfs which is integrity protected using a manifest from the ESP.
 This manifest is generated using [](../reference/integrity-protect)) and contains the dm-verity root hash of the
 rootfs partition. `snap-bootstrap` will parse information for the manifest and perform the following:

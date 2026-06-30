@@ -1,12 +1,15 @@
 (command-integrity-protect)=
+
 # `integrity-protect`
 
 Basic usage:
+
 ```bash
 encrypt-cloud-image integrity-protect input.vhd
 ```
 
 This command expects an input vhd file which contains the following 3 partitions:
+
 ```
 $ sgdisk input.vhd --print
 
@@ -19,7 +22,9 @@ Number  Start (sector)    End (sector)  Size       Code  Name
   14            2048           10239   4.0 MiB     EF02
   15           10240         2107391   1024.0 MiB  EF00
 ```
+
 `integrity-protect` will:
+
 - apply some customizations to the rootfs. See section [Customizations](customizations.md).
 - shrink the filesystem of the rootfs (partition 1).
 - re-create the root partition to fit the shrunk filesystem.
@@ -29,6 +34,7 @@ Number  Start (sector)    End (sector)  Size       Code  Name
 - place the manifest in the ESP partition next to the kernel UKI.
 
 This is the resulting image:
+
 ```
 $ sgdisk input.vhd --print
 Disk input.vhd: 62916609 sectors, 30.0 GiB
@@ -41,10 +47,13 @@ Number  Start (sector)    End (sector)  Size       Code  Name
   14            2048           10239   4.0 MiB     EF02
   15           10240         2107391   1024.0 MiB  EF00
 ```
+
 and an example manifest:
+
 ```bash
-$ cat esp/EFI/ubuntu/manifest.json | jq
+cat esp/EFI/ubuntu/manifest.json | jq
 ```
+
 ```json
 {
   "partitions": [
@@ -65,12 +74,14 @@ for more information.
 ## Using a writable partition
 
 Example usage:
+
 ```bash
 encrypt-cloud-image integrity-protect --writable input.vhd
 ```
 
 The `integrity-protect` command supports an optional `--writable` argument which will also
 create a fixed size 1GB writable partition, physically located after the verity one:
+
 ```
 $ sgdisk input.vhd --print
 Disk input.vhd: 62916609 sectors, 30.0 GiB
@@ -86,9 +97,11 @@ Number  Start (sector)    End (sector)  Size       Code  Name
 ```
 
 with the following manifest file:
+
 ```bash
-$ cat esp/EFI/ubuntu/manifest.json | jq
+cat esp/EFI/ubuntu/manifest.json | jq
 ```
+
 ```json
 {
   "partitions": [
@@ -116,11 +129,14 @@ For the confidential computing model, the writable partition must also be encryp
 ## Options
 
 ### Override cloud-init datasources
+
 It may be desirable to override an image's enabled cloud-init datasources to facilitate debugging the final image in QEMU.
 To enable only the NoCloud datasource so that an image can be initialized with user data from a separate seed image:
+
 ```bash
 $ sudo encrypt-cloud-image integrity-protect \
                                     --override-datasources "NoCloud" \
                                     <input_image>
 ```
+
 The `--override-datasources` option takes a comma-delimited list of datasources.

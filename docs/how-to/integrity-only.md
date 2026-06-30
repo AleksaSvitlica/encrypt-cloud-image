@@ -8,6 +8,7 @@ and an tmpfs-based writable partition as the upper one.
 To produce such an image from a source image the following steps are required:
 
 1. invoke `integrity-protect` to create a verity partition:
+
 ```bash
 # needs sudo for mount permissions
 sudo encrypt-cloud-image integrity-protect input.vhd -o final.vhd

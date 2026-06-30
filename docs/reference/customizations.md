@@ -1,4 +1,5 @@
 (customizations)=
+
 # Customizations
 
 Images that are generated using `encrypt-cloud-image` subcommands, contain

@@ -248,6 +248,11 @@ func AddKey(devicePath string, existingKey, key []byte, options *AddKeyOptions) 
 	return cryptsetupCmd(bytes.NewReader(key), writeExistingKeyToFifo, args...)
 }
 
+// RemoveKey removes the provided key from the specified LUKS2 container.
+func RemoveKey(devicePath string, key []byte) error {
+	return cryptsetupCmd(bytes.NewReader(key), nil, "luksRemoveKey", "--type", "luks2", "--key-file", "-", devicePath)
+}
+
 // ImportToken imports the supplied token in to the JSON metadata area of the specified LUKS2 container.
 func ImportToken(devicePath string, token Token) error {
 	tokenJSON, err := json.Marshal(token)

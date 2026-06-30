@@ -1,10 +1,12 @@
 (local-testing)=
+
 # Local provisioning and booting with QEMU tutorial
 
 This tutorial describes how to provision an Ubuntu image with the
 `encrypt-cloud-image` tool for various different scenarios.
 
 ## Runtime prerequisites
+
 - Ubuntu environment
 - root privileges (required to create NBD devices, use /dev/mapper/control and mount block devices)
 - cryptsetup (>= 2.2.0)
@@ -19,6 +21,7 @@ This tutorial describes how to provision an Ubuntu image with the
 - cloud-guest-utils (for growpart)
 
 ## Installing dependencies
+
 First install dependencies that are needed:
 - `golang`, necessary for the `encrypt-cloud-image` tool
 - `swtpm`, provides a vTPM implementation
@@ -55,22 +58,15 @@ If you are building a custom image you need to modify the instructions below usi
 the instructions from [](custom-cert)
 ```
 
-````{tabs}
+There are two supported workflows for image provisioning. Please follow one of these depending on your intended scenario:
 
-:::{group-tab} CVM with FDE
-```{include} ../howto/encrypt-only.md
-```
-:::
-
-:::{group-tab} Ephemeral VM with rootfs integrity
-```{include} ../howto/integrity-only.md
-```
-:::
-
-````
+- [Provision an image for CVM with FDE](../how-to/encrypt-only.md)
+- [Provision an image with OS disk integrity for ephemeral VMs](../how-to/integrity-only.md)
 
 ## Create cloud-init metadata
+
 To create the cloud-init seed partition (replace your launchpad user):
+
 ```bash
 cat << EOF > user-data.yaml
 #cloud-config
